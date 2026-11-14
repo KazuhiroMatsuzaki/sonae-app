@@ -380,7 +380,7 @@ function vStock(){
 }
 
 // アフィリエイトID（Amazonアソシエイトのトラッキング ID と 楽天アフィリエイトID）
-const AFF={amazon:"",rakuten:"598627be.2181b499.598627bf.d1f928b2"};
+const AFF={amazon:"sabokika-22",rakuten:"598627be.2181b499.598627bf.d1f928b2"};
 function amazonUrl(kw){return "https://www.amazon.co.jp/s?k="+encodeURIComponent(kw)+(AFF.amazon?"&tag="+encodeURIComponent(AFF.amazon):"")}
 function rakutenUrl(kw){
   const u="https://search.rakuten.co.jp/search/mall/"+encodeURIComponent(kw)+"/";
@@ -395,7 +395,7 @@ function vShop(){
   const exp=S.items.filter(i=>{const d=daysLeft(i);return d!==null&&d<=30});
   const sec=(t,sub,rows)=>`<section class="card"><div class="card-head"><h2>${t}</h2><span>${sub}</span></div>${rows||'<p style="color:var(--muted)">ありません</p>'}</section>`;
   return header("買い物リスト","不足分と補充分を自動でまとめています")+
-  `<p class="note">【PR】Amazon・楽天のリンクは広告（アフィリエイト）を含みます。お店で買う時はこの画面を見せるだけでOKです。</p>
+  `<p class="note">【PR】Amazon・楽天のリンクは広告（アフィリエイト）を含みます。Amazonのアソシエイトとして、そなえ帳は適格販売により収入を得ています。お店で買う時はこの画面を見せるだけでOKです。</p>
   <div class="stack">
   ${sec(`${S.goal}日分に足りないもの`,"家族の人数から計算",short.length?`<div class="list">${short.map(s=>`<div class="row"><div class="main"><b>${esc(s.name)}</b><small>${esc(s.why)}</small></div><span class="pill p-warn num">${esc(s.q)}</span></div><div class="actions" style="justify-content:flex-end;margin:0 0 6px">${shopLinks(s.kw)}</div>`).join("")}</div>`:"")}
   ${sec("使った分の補充","「使った」を押したもの",used.length?`<div class="list">${used.map(i=>`<div class="row"><div class="main"><b>${esc(i.name)}</b><small class="num">${i.used}個 使用</small></div>${shopLinks(i.name)}<button class="btn sm" data-bought="${i.id}">買った</button></div>`).join("")}</div>`:"")}
