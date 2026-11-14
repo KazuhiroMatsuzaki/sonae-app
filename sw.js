@@ -1,5 +1,5 @@
 // オフライン対応：アプリ本体は先に保存し、フォントは一度読んだら保存する
-const CACHE = "sonae-v2";
+const CACHE = "sonae-v3";
 const CORE = ["./", "./index.html", "./manifest.json", "./icon.svg", "./icon-192.png", "./icon-512.png", "./icon-180.png", "./zxing.min.js"];
 
 self.addEventListener("install", e => {
