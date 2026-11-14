@@ -142,6 +142,36 @@ details:first-of-type{border-top:0}
 summary{cursor:pointer;font-weight:700;font-family:var(--font-head)}
 details ul,details ol{margin:8px 0 0;padding-left:20px;display:grid;gap:4px;font-size:14px}
 a{color:var(--accent)}
+/* scanner */
+.scan-overlay{z-index:60}
+.scan-box{position:relative;margin-top:12px;border-radius:12px;overflow:hidden;background:#000;aspect-ratio:4/3;max-width:100%}
+.scan-box video{width:100%;height:100%;object-fit:cover;display:block}
+.scan-box i{position:absolute;left:10%;right:10%;top:35%;bottom:35%;border:3px solid #ff6b55;border-radius:8px;box-shadow:0 0 0 999px rgba(0,0,0,.35)}
+/* print (A4) */
+#print{display:none}
+@page{size:A4;margin:12mm}
+@media print{
+  body{background:#fff;color:#000}
+  .wrap,.tabs,#layer,#scanner,.toast{display:none!important}
+  #print{display:block;font-family:var(--font-body);font-size:10.5pt;line-height:1.45;color:#000}
+  #print h1{font-family:var(--font-head);font-size:20pt;font-weight:900}
+  #print h3{font-family:var(--font-head);font-size:11.5pt;margin:0 0 4px}
+  #print table{width:100%;border-collapse:collapse}
+  #print td,#print th{border-bottom:.5pt solid #999;padding:3px 4px;text-align:left;vertical-align:top}
+  #print th{font-size:9pt;border-bottom:1pt solid #000}
+  #print ol{margin:0;padding-left:16px}
+  .pr-head{display:flex;justify-content:space-between;align-items:baseline;border-bottom:2pt solid #000;padding-bottom:4px;margin-bottom:8px}
+  .pr-head p{font-size:9pt}
+  .pr-grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px}
+  .pr-box{border:1pt solid #000;border-radius:4px;padding:6px 8px;break-inside:avoid;margin-bottom:8px}
+  .pr-grid2 .pr-box{margin-bottom:0}
+  .pr-list td:nth-child(3),.pr-list td:nth-child(5){text-align:center;width:3em}
+  .pr-list td:nth-child(4){width:7em}
+  .pr-foot{font-size:9pt;margin-top:6px}
+  .pr-steps{font-size:9pt;gap:6px}
+  .pr-step h3{font-size:10pt}
+  .pr-grid2 td:first-child{width:7.5em}
+}
 @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 </style>
 
@@ -151,6 +181,7 @@ a{color:var(--accent)}
 <div class="wrap" id="app"></div>
 <div class="tabs"><nav id="tabs" aria-label="メニュー"></nav></div>
 <div id="layer"></div>
+<div id="print" aria-hidden="true"></div>
 
 <script>
 (function(){
@@ -342,14 +373,21 @@ function vStock(){
     <button class="chip" data-mode="place" aria-pressed="${stockMode==="place"}">保管場所別</button>
     <button class="chip" data-mode="exp" aria-pressed="${stockMode==="exp"}">期限順</button></div>
   </div>
-  <div class="actions" style="margin:0"><button class="btn primary" data-add="1">＋ 品目を追加</button><button class="btn" data-tmpl="1">よくある備蓄から一括追加</button></div>
+  <div class="actions" style="margin:0;justify-content:flex-start"><button class="btn primary" data-add="1">＋ 品目を追加</button><button class="btn" data-scanadd="1">バーコードで追加</button><button class="btn" data-tmpl="1">よくある備蓄から一括追加</button></div>
+  <div class="actions" style="margin:0;justify-content:flex-start"><button class="btn sm" data-cal="1">期限をカレンダーに登録</button><button class="btn sm" data-print="1">印刷用A4</button></div>
   ${groups.filter(g=>g[1].length).map(([t,list])=>`<section class="card"><div class="card-head"><h2>${esc(t)}</h2><span class="num">${list.length}品目</span></div><div class="list">${list.map(itemRow).join("")}</div></section>`).join("")}
   </div>`;
 }
 
+// アフィリエイトID（Amazonアソシエイトのトラッキング ID と 楽天アフィリエイトID）
+const AFF={amazon:"",rakuten:""};
+function amazonUrl(kw){return "https://www.amazon.co.jp/s?k="+encodeURIComponent(kw)+(AFF.amazon?"&tag="+encodeURIComponent(AFF.amazon):"")}
+function rakutenUrl(kw){
+  const u="https://search.rakuten.co.jp/search/mall/"+encodeURIComponent(kw)+"/";
+  return AFF.rakuten?"https://hb.afl.rakuten.co.jp/hgc/"+AFF.rakuten+"/?pc="+encodeURIComponent(u)+"&m="+encodeURIComponent(u):u;
+}
 function shopLinks(kw){
-  const k=encodeURIComponent(kw);
-  return `<a class="btn sm" href="https://www.amazon.co.jp/s?k=${k}" target="_blank" rel="noopener">Amazon</a><a class="btn sm" href="https://search.rakuten.co.jp/search/mall/${k}/" target="_blank" rel="noopener">楽天</a>`;
+  return `<a class="btn sm" href="${esc(amazonUrl(kw))}" target="_blank" rel="noopener sponsored">Amazon</a><a class="btn sm" href="${esc(rakutenUrl(kw))}" target="_blank" rel="noopener sponsored">楽天</a>`;
 }
 function vShop(){
   const short=shortages();
@@ -357,7 +395,7 @@ function vShop(){
   const exp=S.items.filter(i=>{const d=daysLeft(i);return d!==null&&d<=30});
   const sec=(t,sub,rows)=>`<section class="card"><div class="card-head"><h2>${t}</h2><span>${sub}</span></div>${rows||'<p style="color:var(--muted)">ありません</p>'}</section>`;
   return header("買い物リスト","不足分と補充分を自動でまとめています")+
-  `<p class="note">公開版ではリンクにアフィリエイトを付けます。お店で買う時はこの画面を見せるだけでOKです。</p>
+  `<p class="note">【PR】Amazon・楽天のリンクは広告（アフィリエイト）を含みます。お店で買う時はこの画面を見せるだけでOKです。</p>
   <div class="stack">
   ${sec(`${S.goal}日分に足りないもの`,"家族の人数から計算",short.length?`<div class="list">${short.map(s=>`<div class="row"><div class="main"><b>${esc(s.name)}</b><small>${esc(s.why)}</small></div><span class="pill p-warn num">${esc(s.q)}</span></div><div class="actions" style="justify-content:flex-end;margin:0 0 6px">${shopLinks(s.kw)}</div>`).join("")}</div>`:"")}
   ${sec("使った分の補充","「使った」を押したもの",used.length?`<div class="list">${used.map(i=>`<div class="row"><div class="main"><b>${esc(i.name)}</b><small class="num">${i.used}個 使用</small></div>${shopLinks(i.name)}<button class="btn sm" data-bought="${i.id}">買った</button></div>`).join("")}</div>`:"")}
@@ -417,8 +455,9 @@ function vMore(){
     <details><summary>スマホの電池をもたせる</summary><ul><li>省電力モード・画面の明るさを最小に</li><li>使わないアプリを閉じ、位置情報をオフ</li><li>通話よりもSMSや伝言板を使う</li></ul></details>
   </section>
   <section class="card"><div class="card-head"><h2>データ</h2><span>サーバーには送りません</span></div>
+    <div class="actions" style="justify-content:flex-start"><button class="btn" data-print="1">印刷用A4を作る</button><button class="btn" data-cal="1">期限をカレンダーに登録</button></div>
     <div class="actions" style="justify-content:flex-start"><button class="btn" data-backup="1">バックアップを表示</button><button class="btn" data-reset="1">サンプルに戻す</button></div>
-    <p style="font-size:12px;color:var(--muted);margin-top:8px">公開版では、印刷用A4（備蓄リスト・連絡先・集合場所）と、期限日をカレンダーに登録する機能が付きます。</p>
+    <p style="font-size:12px;color:var(--muted);margin-top:8px">停電でスマホが使えない時に備えて、紙でも持っておくと安心です。</p>
   </section>
   </div>`;
 }
@@ -426,28 +465,150 @@ function vMore(){
 // ---- sheets
 function openSheet(html){document.getElementById("layer").innerHTML=`<div class="overlay" data-close="1"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`;const f=document.querySelector(".sheet input,.sheet button");if(f)f.focus()}
 function closeSheet(){document.getElementById("layer").innerHTML=""}
-function editSheet(it){
-  const n=!it; it=it||{name:"",cat:"food",per:1,qty:1,exp:"",place:"キッチン",ess:""};
+function applyCode(code){
+  const f=document.getElementById("f-code");if(!f)return;
+  f.value=code;document.getElementById("f-code-show").textContent="バーコード "+code;
+  const m=(S.codes||{})[code];
+  if(m){
+    document.getElementById("f-name").value=m.name;document.getElementById("f-cat").value=m.cat;
+    document.getElementById("f-per").value=m.per;document.getElementById("f-place").value=m.place;
+    toast("登録済みの品名を入れました");document.getElementById("f-exp").focus();
+  }else{toast("はじめての商品です。品名を入れてください（次回から自動で入ります）");document.getElementById("f-name").focus()}
+}
+function editSheet(it,autoScan){
+  const n=!it; it=it||{name:"",cat:"food",per:1,qty:1,exp:"",place:"キッチン",ess:"",code:""};
   openSheet(`<h2>${n?"品目を追加":"品目を編集"}</h2>
   <form class="form" id="f-item">
-    <button type="button" class="btn" disabled>バーコードを読み取る（公開版で対応）</button>
+    <div class="actions" style="margin:0;justify-content:flex-start;align-items:center"><button type="button" class="btn" data-scan="1">バーコードを読み取る</button><small id="f-code-show" style="color:var(--muted)">${it.code?"バーコード "+esc(it.code):""}</small></div>
+    <input type="hidden" id="f-code" value="${esc(it.code||"")}">
     <label>品名<input id="f-name" required value="${esc(it.name)}" placeholder="例：保存水 2L"></label>
     <div class="two"><label>種類<select id="f-cat">${Object.entries(CATS).map(([k,c])=>`<option value="${k}" ${k===it.cat?"selected":""}>${c.name}</option>`).join("")}</select></label>
     <label>保管場所<select id="f-place">${PLACES.map(p=>`<option ${p===it.place?"selected":""}>${p}</option>`).join("")}</select></label></div>
     <div class="two"><label>個数<input id="f-qty" type="number" min="0" inputmode="numeric" value="${it.qty}"></label>
     <label id="f-per-l">1個あたり（L・食・回）<input id="f-per" type="number" min="0" step="0.1" inputmode="decimal" value="${it.per}"></label></div>
     <label>賞味・使用期限（なければ空欄）<input id="f-exp" type="date" value="${esc(it.exp)}"></label>
+    ${!n&&it.exp?`<div class="actions" style="margin:0;justify-content:flex-start"><button type="button" class="btn sm" data-calone="${it.id}">この期限をカレンダーに登録</button><a class="btn sm" href="${esc(gcalUrl(it))}" target="_blank" rel="noopener">Googleカレンダー</a></div>`:""}
     <div class="actions">${n?"<span></span>":`<button type="button" class="btn" data-del="${it.id}" style="color:var(--bad)">削除</button>`}<span style="display:flex;gap:8px"><button type="button" class="btn" data-close="1">やめる</button><button class="btn primary" type="submit">保存</button></span></div>
   </form>`);
   document.getElementById("f-item").addEventListener("submit",e=>{
     e.preventDefault();
     const v={name:document.getElementById("f-name").value.trim(),cat:document.getElementById("f-cat").value,place:document.getElementById("f-place").value,
-      qty:Math.max(0,+document.getElementById("f-qty").value||0),per:Math.max(0,+document.getElementById("f-per").value||1),exp:document.getElementById("f-exp").value};
+      qty:Math.max(0,+document.getElementById("f-qty").value||0),per:Math.max(0,+document.getElementById("f-per").value||1),exp:document.getElementById("f-exp").value,
+      code:document.getElementById("f-code").value};
     if(!v.name)return;
+    if(v.code){S.codes=S.codes||{};S.codes[v.code]={name:v.name,cat:v.cat,per:v.per,place:v.place}}
     if(n){S.items.push({id:S.seq++,ess:"",...v})}else{Object.assign(S.items.find(x=>x.id===it.id),v)}
     save();closeSheet();render();toast("保存しました");
   });
+  if(autoScan)openScanner(applyCode);
 }
+
+// ---- barcode scanner（対応端末は標準機能、iPhoneなどはZXingで読み取る）
+let scanStop=null;
+function loadZXing(){
+  return new Promise((ok,ng)=>{if(window.ZXing)return ok();const s=document.createElement("script");s.src="zxing.min.js";s.onload=()=>ok();s.onerror=ng;document.head.appendChild(s)});
+}
+function closeScanner(){if(scanStop){try{scanStop()}catch(e){}scanStop=null}const el=document.getElementById("scanner");if(el)el.remove()}
+async function openScanner(onCode){
+  closeScanner();
+  const el=document.createElement("div");el.id="scanner";el.className="overlay scan-overlay";
+  el.innerHTML=`<div class="sheet" role="dialog" aria-modal="true" aria-label="バーコード読み取り"><h2>バーコードを読み取る</h2>
+    <p style="font-size:13px;color:var(--muted);margin-top:4px">商品のバーコード（JANコード）を枠に合わせてください。</p>
+    <div class="scan-box"><video id="scan-video" playsinline muted></video><i></i></div>
+    <p id="scan-msg" style="font-size:13px;color:var(--muted)">カメラを起動しています…</p>
+    <form id="scan-manual" class="form" style="margin-top:4px"><label>読み取れない時は数字を入力<input id="scan-code" inputmode="numeric" pattern="[0-9]{8,14}" placeholder="例：4901234567894"></label>
+    <div class="actions"><button type="button" class="btn" data-scanclose="1">やめる</button><button class="btn primary" type="submit">この番号を使う</button></div></form></div>`;
+  document.body.appendChild(el);
+  let done=false;
+  const finish=code=>{if(done)return;done=true;if(navigator.vibrate)navigator.vibrate(80);closeScanner();onCode(code)};
+  document.getElementById("scan-manual").addEventListener("submit",e=>{e.preventDefault();const v=document.getElementById("scan-code").value.replace(/\D/g,"");if(v.length>=8)finish(v)});
+  const video=document.getElementById("scan-video"),msg=document.getElementById("scan-msg");
+  try{
+    if("BarcodeDetector" in window&&(await BarcodeDetector.getSupportedFormats()).includes("ean_13")){
+      const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"},audio:false});
+      video.srcObject=stream;await video.play();
+      const det=new BarcodeDetector({formats:["ean_13","ean_8","upc_a"]});let alive=true;
+      scanStop=()=>{alive=false;stream.getTracks().forEach(t=>t.stop())};
+      msg.textContent="読み取り中…";
+      const loop=async()=>{if(!alive)return;try{const r=await det.detect(video);if(r.length)return finish(r[0].rawValue)}catch(e){}requestAnimationFrame(loop)};loop();
+    }else{
+      await loadZXing();
+      const hints=new Map();hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS,[ZXing.BarcodeFormat.EAN_13,ZXing.BarcodeFormat.EAN_8,ZXing.BarcodeFormat.UPC_A]);
+      const reader=new ZXing.BrowserMultiFormatReader(hints,300);
+      scanStop=()=>reader.reset();
+      msg.textContent="読み取り中…";
+      await reader.decodeFromConstraints({video:{facingMode:"environment"},audio:false},video,(res)=>{if(res)finish(res.getText())});
+    }
+  }catch(e){
+    msg.textContent="カメラを使えませんでした。設定でカメラを許可するか、下に数字を入力してください。";
+  }
+}
+
+// ---- calendar（.ics を作って端末のカレンダーに取り込む）
+function ymd(s){return s.replace(/-/g,"")}
+function addDays(s,n){return iso(new Date(s+"T00:00:00").getTime()+n*DAY)}
+function icsText(items,before){
+  const now=new Date().toISOString().replace(/[-:]/g,"").replace(/\.\d+/,"");
+  const ev=items.map(i=>[
+    "BEGIN:VEVENT","UID:sonae-"+i.id+"-"+ymd(i.exp)+"@sonae-app","DTSTAMP:"+now,
+    "DTSTART;VALUE=DATE:"+ymd(i.exp),"DTEND;VALUE=DATE:"+ymd(addDays(i.exp,1)),
+    "SUMMARY:【そなえ帳】"+i.name.replace(/[,;]/g," ")+"の期限",
+    "DESCRIPTION:保管場所 "+i.place+"。期限前に食べて（使って）買い足しましょう。",
+    "BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:"+i.name.replace(/[,;]/g," ")+"の期限が近づいています","TRIGGER:-P"+before+"D","END:VALARM",
+    "END:VEVENT"].join("\r\n"));
+  return ["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//sonae-app//JA","CALSCALE:GREGORIAN",...ev,"END:VCALENDAR"].join("\r\n");
+}
+function downloadIcs(items,before){
+  if(!items.length)return toast("期限の入った品目がありません");
+  const blob=new Blob([icsText(items,before)],{type:"text/calendar;charset=utf-8"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="sonae-kigen.ics";
+  document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},4000);
+  toast("カレンダーファイルを作りました。開いて「すべて追加」を押してください");
+}
+function gcalUrl(i){
+  return "https://calendar.google.com/calendar/render?action=TEMPLATE&text="+encodeURIComponent("【そなえ帳】"+i.name+"の期限")+"&dates="+ymd(i.exp)+"/"+ymd(addDays(i.exp,1))+"&details="+encodeURIComponent("保管場所 "+i.place);
+}
+function calSheet(){
+  const list=S.items.filter(i=>i.exp&&daysLeft(i)>=0).sort((a,b)=>a.exp.localeCompare(b.exp));
+  openSheet(`<h2>期限をカレンダーに登録</h2><p style="font-size:13px;color:var(--muted);margin-top:4px">選んだ品目の期限日を、スマホのカレンダーに予定として入れます。お知らせも付きます。</p>
+  <form id="f-cal" class="form">
+    <label>お知らせのタイミング<select id="cal-before"><option value="30">期限の1か月前</option><option value="14">期限の2週間前</option><option value="7">期限の1週間前</option></select></label>
+    <div class="tmpl">${list.map(i=>`<label><input type="checkbox" value="${i.id}" checked>${esc(i.name)}<span style="margin-left:auto;color:var(--muted);font-size:12px" class="num">${i.exp.replace(/-/g,"/")}</span></label>`).join("")||"<p>期限の入った品目がありません</p>"}</div>
+    <p style="font-size:12px;color:var(--muted)">iPhoneはファイルを開いて「すべて追加」、Androidはカレンダーアプリで開いてください。Googleカレンダーには各品目の「編集」から1件ずつ登録できます。</p>
+    <div class="actions"><span></span><span style="display:flex;gap:8px"><button type="button" class="btn" data-close="1">やめる</button><button class="btn primary" type="submit">カレンダーに登録</button></span></div>
+  </form>`);
+  document.getElementById("f-cal").addEventListener("submit",e=>{
+    e.preventDefault();
+    const ids=[...document.querySelectorAll("#f-cal input:checked")].map(x=>+x.value);
+    downloadIcs(S.items.filter(i=>ids.includes(i.id)),+document.getElementById("cal-before").value);
+  });
+}
+
+// ---- 印刷用A4
+function buildPrint(){
+  const byPlace={};S.items.filter(i=>i.qty>0).forEach(i=>(byPlace[i.place]=byPlace[i.place]||[]).push(i));
+  const cats=["water","food","toilet"];
+  const firstSteps=["quake","power","net","water"].map(k=>`<div class="pr-box pr-step"><h3>${SOS[k].l}</h3><ol>${SOS[k].steps.slice(0,3).map(s=>`<li>${esc(s)}</li>`).join("")}</ol></div>`).join("");
+  document.getElementById("print").innerHTML=`
+  <header class="pr-head"><h1>わが家の防災シート</h1><p>作成日 ${iso(today).replace(/-/g,"/")} ・ ${persons()}人${S.hh.pet?"＋ペット"+S.hh.pet:""} ・ そなえ帳</p></header>
+  <section class="pr-grid2">
+    <div class="pr-box"><h3>家族の連絡先</h3><table>${S.contacts.map(c=>`<tr><td>${esc(c.name)}</td><td class="num">${esc(c.tel)}</td></tr>`).join("")}<tr><td>集合場所</td><td>${esc(S.meet)}</td></tr><tr><td>第2の集合場所</td><td>${esc(S.meet2)}</td></tr></table></div>
+    <div class="pr-box"><h3>備えの日数（${iso(today).replace(/-/g,"/")}時点）</h3><table>${cats.map(c=>`<tr><td>${CATS[c].name}</td><td class="num">${days(c).toFixed(1)}日分</td></tr>`).join("")}</table>
+      <h3 style="margin-top:8px">災害用伝言ダイヤル 171</h3><p>171 → 録音「1」・再生「2」 → 自宅の番号（市外局番から）</p></div>
+  </section>
+  <section class="pr-box"><h3>備蓄リスト（保管場所ごと）</h3>
+    <table class="pr-list"><thead><tr><th>保管場所</th><th>品名</th><th>数</th><th>期限</th><th>点検</th></tr></thead><tbody>
+    ${PLACES.filter(p=>byPlace[p]).map(p=>byPlace[p].map((i,ix)=>`<tr><td>${ix?"":esc(p)}</td><td>${esc(i.name)}</td><td class="num">${i.qty}</td><td class="num">${i.exp?i.exp.replace(/-/g,"/"):"—"}</td><td>□</td></tr>`).join("")).join("")}
+    </tbody></table></section>
+  <section class="pr-grid2 pr-steps"><h3 style="grid-column:1/-1;margin:0">最初にやること</h3>${firstSteps}</section>
+  <p class="pr-foot">停電・通信障害でスマホが使えない時のために、冷蔵庫や玄関など目につく場所に貼っておきましょう。</p>`;
+}
+function printSheet(){
+  openSheet(`<h2>印刷用A4</h2><p style="margin-top:6px">連絡先・集合場所・備えの日数・保管場所ごとの備蓄リスト・最初にやることを、A4にまとめて印刷します。</p>
+  <p style="font-size:12px;color:var(--muted);margin-top:8px">印刷画面で「PDFとして保存」も選べます。ホーム画面から開いたアプリで印刷画面が出ない時は、Safariでこのページを開き、共有ボタン →「プリント」を選んでください。</p>
+  <div class="actions"><span></span><span style="display:flex;gap:8px"><button class="btn" data-close="1">やめる</button><button class="btn primary" data-doprint="1">印刷する</button></span></div>`);
+}
+window.addEventListener("beforeprint",buildPrint);
 function tmplSheet(){
   openSheet(`<h2>よくある備蓄から一括追加</h2><p style="font-size:13px;color:var(--muted);margin-top:4px">家にあるものにチェックを入れてください。数と期限はあとで直せます。</p>
   <form id="f-tmpl" class="form"><div class="tmpl">${TEMPLATES.map((t,i)=>`<label><input type="checkbox" id="t${i}" value="${i}">${esc(t.name)}<span style="margin-left:auto;color:var(--muted);font-size:12px">${t.qty}${CATS[t.cat].calc?"個":CATS[t.cat].unit}</span></label>`).join("")}</div>
@@ -509,9 +670,16 @@ document.addEventListener("click",e=>{
   if(d.backup)return backupSheet();
   if(d.reset)return resetSheet();
   if(d.doreset){S=sample();save();closeSheet();render();return toast("サンプルに戻しました")}
+  if(d.scan)return openScanner(applyCode);
+  if(d.scanadd)return editSheet(null,true);
+  if(d.scanclose)return closeScanner();
+  if(d.cal)return calSheet();
+  if(d.calone){const i=S.items.find(x=>x.id==d.calone);if(i)downloadIcs([i],30);return}
+  if(d.print)return printSheet();
+  if(d.doprint){buildPrint();closeSheet();setTimeout(()=>{try{window.print()}catch(e){toast("この画面では印刷できません。Safariで開いてください")}},100);return}
   if(d.copy){const ta=document.getElementById("bk");const p=navigator.clipboard?navigator.clipboard.writeText(ta.value):Promise.reject();p.then(()=>toast("コピーしました")).catch(()=>{ta.select();toast("選択しました。長押しでコピーしてください")});return}
 });
-document.addEventListener("keydown",e=>{if(e.key==="Escape")closeSheet()});
+document.addEventListener("keydown",e=>{if(e.key==="Escape"){closeScanner();closeSheet()}});
 function fromHash(){const h=(location.hash||"").slice(1);if(["home","stock","shop","sos","more"].includes(h))view=h;render()}
 window.addEventListener("hashchange",fromHash);
 fromHash();

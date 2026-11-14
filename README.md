@@ -16,3 +16,7 @@
 | `sw.js` | オフラインで開くための仕組み（Service Worker） |
 | `manifest.json` | ホーム画面に追加した時の名前・アイコン |
 | `icon*.png`, `icon.svg` | アイコン |
+
+## 使用ライブラリ
+
+- バーコード読み取り：[ZXing for JS](https://github.com/zxing-js/library)（`zxing.min.js`、Apache License 2.0）
