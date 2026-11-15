@@ -282,7 +282,7 @@ takeSnap();
 function save(){markChanges();try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}if(typeof scheduleSync==="function")scheduleSync()}
 
 // ---- 家族共有（Supabase）。通信がなくても端末だけで動き、つながった時に家族とそろえる
-const SUPA={url:"",key:""};
+const SUPA={url:"https://wbjnhrsyetlvzgbnudgs.supabase.co",key:"sb_publishable_GrvIqky90two2oBRqUTpJw_wsdVV_WE"};
 const FKEY="sonae-family";
 let FAM=null;try{FAM=JSON.parse(localStorage.getItem(FKEY)||"null")}catch(e){}
 function saveFam(){try{FAM?localStorage.setItem(FKEY,JSON.stringify(FAM)):localStorage.removeItem(FKEY)}catch(e){}}
