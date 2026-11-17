@@ -203,7 +203,8 @@ const CATS={
   medical:{name:"医薬品",unit:"個"},
   other:{name:"その他",unit:"個"}
 };
-const PLACES=["キッチン","玄関","押入れ","寝室","車","その他"];
+const DEFAULT_PLACES=["キッチン","玄関","押入れ","寝室","車","その他"];
+function places(){const base=(S.places&&S.places.length)?S.places:DEFAULT_PLACES;const extra=[...new Set(S.items.map(i=>i.place).filter(p=>p&&!base.includes(p)))];return [...base,...extra]}
 const ESSENTIALS=[
   ["flashlight","懐中電灯"],["battery","乾電池"],["mobilebat","モバイルバッテリー"],["radio","ラジオ"],
   ["stove","カセットコンロ"],["gas","カセットボンベ"],["cash","現金・小銭"],["meds","常備薬"],
@@ -265,7 +266,7 @@ if(!S||!S.items)S=sample();
 const newId=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,8);
 
 // ---- 変更の記録（家族共有で「どれが新しいか」を判断するため）
-const FIELDS=["hh","goal","contacts","meet","meet2"];
+const FIELDS=["hh","goal","contacts","meet","meet2","places"];
 const strip=i=>{const {u,used,...r}=i;return JSON.stringify(r)};
 let snap=null;
 function takeSnap(){snap={items:Object.fromEntries(S.items.map(i=>[i.id,strip(i)])),f:Object.fromEntries(FIELDS.map(k=>[k,JSON.stringify(S[k])]))}}
@@ -293,7 +294,7 @@ function rpc(fn,body){
   if(!SUPA.key.startsWith("sb_"))h.Authorization="Bearer "+SUPA.key;
   return fetch(SUPA.url.replace(/\/$/,"")+"/rest/v1/rpc/"+fn,{method:"POST",headers:h,body:JSON.stringify(body)}).then(r=>{if(!r.ok)throw new Error("HTTP "+r.status);return r.json()});
 }
-function shared(s){return {items:s.items.map(({used,...r})=>r),del:s.del||{},mt:s.mt||{},codes:s.codes||{},hh:s.hh,goal:s.goal,contacts:s.contacts,meet:s.meet,meet2:s.meet2}}
+function shared(s){return {items:s.items.map(({used,...r})=>r),del:s.del||{},mt:s.mt||{},codes:s.codes||{},hh:s.hh,goal:s.goal,contacts:s.contacts,meet:s.meet,meet2:s.meet2,places:s.places}}
 function merge(a,b){
   if(!b||!b.items)return a;
   const del={...(b.del||{})};Object.entries(a.del||{}).forEach(([k,v])=>{if(!del[k]||del[k]<v)del[k]=v});
@@ -444,7 +445,7 @@ function itemRow(i){
 }
 function vStock(){
   const groups=stockMode==="cat"?Object.keys(CATS).map(k=>[CATS[k].name,S.items.filter(i=>i.cat===k)])
-    :stockMode==="place"?PLACES.map(p=>[p,S.items.filter(i=>i.place===p)])
+    :stockMode==="place"?places().map(p=>[p,S.items.filter(i=>i.place===p)])
     :[["期限が近い順",[...S.items].filter(i=>i.exp).sort((a,b)=>a.exp.localeCompare(b.exp))]];
   return header("備蓄",`${S.items.length}品目を登録中`)+
   `<div class="stack">
@@ -523,6 +524,10 @@ function vMore(){
     <div><span>目標の日数</span><span class="chips">${[3,7,14].map(n=>`<button class="chip" data-goal="${n}" aria-pressed="${S.goal===n}">${n}日</button>`).join("")}</span></div></div>
     <p style="font-size:12px;color:var(--muted);margin-top:10px">1人1日あたり 水3L・食事3食・トイレ5回で計算（ペットは水0.5L）。国は最低3日、できれば1週間分を勧めています。</p>
   </section>
+  <section class="card"><div class="card-head"><h2>保管場所</h2><span>備蓄をしまっている場所</span></div>
+    <div class="list">${places().map((p,ix,arr)=>{const n=S.items.filter(i=>i.place===p).length;return `<div class="row"><div class="main"><b>${esc(p)}</b><small class="num">${n}品目</small></div>${ix?`<button class="btn sm ghost" data-placeup="${ix}" aria-label="${esc(p)}を上へ">↑</button>`:""}<button class="btn sm" data-placeren="${ix}">名前を変える</button><button class="btn sm ghost" data-placedel="${ix}" style="color:var(--bad)">削除</button></div>`}).join("")}</div>
+    <form id="f-place-add" class="actions" style="justify-content:flex-start;flex-wrap:nowrap"><input id="place-add" placeholder="新しい場所（例：物置）" style="flex:1"><button class="btn primary" type="submit">追加</button></form>
+  </section>
   <section class="card"><div class="card-head"><h2>家族の取り決め</h2><button class="btn sm" data-family="1">編集</button></div>
     <div class="list">${S.contacts.map(c=>`<div class="row"><div class="main"><b>${esc(c.name)}</b></div><span class="num">${esc(c.tel)}</span></div>`).join("")}
     <div class="row"><div class="main"><b>集合場所</b><small>${esc(S.meet)}</small></div></div>
@@ -564,7 +569,7 @@ function editSheet(it,autoScan){
     <input type="hidden" id="f-code" value="${esc(it.code||"")}">
     <label>品名<input id="f-name" required value="${esc(it.name)}" placeholder="例：保存水 2L"></label>
     <div class="two"><label>種類<select id="f-cat">${Object.entries(CATS).map(([k,c])=>`<option value="${k}" ${k===it.cat?"selected":""}>${c.name}</option>`).join("")}</select></label>
-    <label>保管場所<select id="f-place">${PLACES.map(p=>`<option ${p===it.place?"selected":""}>${p}</option>`).join("")}</select></label></div>
+    <label>保管場所<select id="f-place">${places().map(p=>`<option ${p===it.place?"selected":""}>${esc(p)}</option>`).join("")}<option value="__new">＋ 新しい場所を追加</option></select><input id="f-place-new" placeholder="例：物置、2階の納戸" hidden></label></div>
     <div class="two"><label>個数<input id="f-qty" type="number" min="0" inputmode="numeric" value="${it.qty}"></label>
     <label id="f-per-l">1個あたり（L・食・回）<input id="f-per" type="number" min="0" step="0.1" inputmode="decimal" value="${it.per}"></label></div>
     <label>賞味・使用期限（なければ空欄）<input id="f-exp" type="date" value="${esc(it.exp)}"></label>
@@ -573,7 +578,7 @@ function editSheet(it,autoScan){
   </form>`);
   document.getElementById("f-item").addEventListener("submit",e=>{
     e.preventDefault();
-    const v={name:document.getElementById("f-name").value.trim(),cat:document.getElementById("f-cat").value,place:document.getElementById("f-place").value,
+    const v={name:document.getElementById("f-name").value.trim(),cat:document.getElementById("f-cat").value,place:placeValue(),
       qty:Math.max(0,+document.getElementById("f-qty").value||0),per:Math.max(0,+document.getElementById("f-per").value||1),exp:document.getElementById("f-exp").value,
       code:document.getElementById("f-code").value};
     if(!v.name)return;
@@ -679,7 +684,7 @@ function buildPrint(){
   </section>
   <section class="pr-box"><h3>備蓄リスト（保管場所ごと）</h3>
     <table class="pr-list"><thead><tr><th>保管場所</th><th>品名</th><th>数</th><th>期限</th><th>点検</th></tr></thead><tbody>
-    ${PLACES.filter(p=>byPlace[p]).map(p=>byPlace[p].map((i,ix)=>`<tr><td>${ix?"":esc(p)}</td><td>${esc(i.name)}</td><td class="num">${i.qty}</td><td class="num">${i.exp?i.exp.replace(/-/g,"/"):"—"}</td><td>□</td></tr>`).join("")).join("")}
+    ${places().filter(p=>byPlace[p]).map(p=>byPlace[p].map((i,ix)=>`<tr><td>${ix?"":esc(p)}</td><td>${esc(i.name)}</td><td class="num">${i.qty}</td><td class="num">${i.exp?i.exp.replace(/-/g,"/"):"—"}</td><td>□</td></tr>`).join("")).join("")}
     </tbody></table></section>
   <section class="pr-grid2 pr-steps"><h3 style="grid-column:1/-1;margin:0">最初にやること</h3>${firstSteps}</section>
   <p class="pr-foot">停電・通信障害でスマホが使えない時のために、冷蔵庫や玄関など目につく場所に貼っておきましょう。</p>`;
@@ -761,6 +766,26 @@ async function doJoin(id,mode){
     render();toast("家族の備蓄に参加しました");
   }catch(e){toast("つながりませんでした。少し待ってからもう一度お試しください")}
 }
+// ---- 保管場所の編集
+function setPlaces(list){S.places=[...new Set(list.map(x=>x.trim()).filter(Boolean))];save();render()}
+function placeValue(){const v=document.getElementById("f-place").value;if(v!=="__new")return v;const n=document.getElementById("f-place-new").value.trim()||"その他";if(!places().includes(n))S.places=[...places(),n];return n}
+function placeRenameSheet(ix){
+  const old=places()[ix];
+  openSheet(`<h2>保管場所の名前を変える</h2><form id="f-pren" class="form"><label>新しい名前<input id="pren" value="${esc(old)}" required></label>
+  <p style="font-size:12px;color:var(--muted)">「${esc(old)}」にある備蓄も、新しい名前に移ります。</p>
+  <div class="actions"><span></span><span style="display:flex;gap:8px"><button type="button" class="btn" data-close="1">やめる</button><button class="btn primary" type="submit">変更</button></span></div></form>`);
+  document.getElementById("f-pren").addEventListener("submit",e=>{e.preventDefault();const nv=document.getElementById("pren").value.trim();if(!nv)return;
+    S.items.forEach(i=>{if(i.place===old)i.place=nv});const list=places().map(p=>p===old?nv:p);closeSheet();setPlaces(list);toast("「"+nv+"」に変更しました")});
+}
+function placeDeleteSheet(ix){
+  const old=places()[ix];const n=S.items.filter(i=>i.place===old).length;const others=places().filter(p=>p!==old);
+  if(!others.length)return toast("保管場所は1つ以上必要です");
+  openSheet(`<h2>「${esc(old)}」を削除しますか？</h2><form id="f-pdel" class="form">
+  ${n?`<label>ここにある${n}品目の移動先<select id="pdel-to">${others.map(p=>`<option>${esc(p)}</option>`).join("")}</select></label>`:`<p>この場所に備蓄はありません。</p>`}
+  <div class="actions"><span></span><span style="display:flex;gap:8px"><button type="button" class="btn" data-close="1">やめる</button><button class="btn primary" type="submit">削除</button></span></div></form>`);
+  document.getElementById("f-pdel").addEventListener("submit",e=>{e.preventDefault();const to=n?document.getElementById("pdel-to").value:null;
+    if(to)S.items.forEach(i=>{if(i.place===old)i.place=to});closeSheet();setPlaces(others);toast("「"+old+"」を削除しました")});
+}
 function leaveSheet(){
   openSheet(`<h2>この端末の共有をやめますか？</h2><p style="margin-top:8px">この端末は家族と同期しなくなります。今の内容はこの端末に残ります。家族のほかの端末はそのまま共有が続きます。</p>
   <div class="actions"><span></span><span style="display:flex;gap:8px"><button class="btn" data-close="1">やめる</button><button class="btn primary" data-doleave="1">共有をやめる</button></span></div>`);
@@ -800,6 +825,9 @@ document.addEventListener("click",e=>{
   if(d.calone){const i=S.items.find(x=>x.id==d.calone);if(i)downloadIcs([i],30);return}
   if(d.print)return printSheet();
   if(d.doprint){buildPrint();closeSheet();setTimeout(()=>{try{window.print()}catch(e){toast("この画面では印刷できません。Safariで開いてください")}},100);return}
+  if(d.placeren)return placeRenameSheet(+d.placeren);
+  if(d.placedel)return placeDeleteSheet(+d.placedel);
+  if(d.placeup){const l=places(),i=+d.placeup;[l[i-1],l[i]]=[l[i],l[i-1]];return setPlaces(l)}
   if(d.famstart)return famStart();
   if(d.famjoin)return joinSheet("");
   if(d.dojoin)return doJoin(d.dojoin,d.jmode);
@@ -809,6 +837,8 @@ document.addEventListener("click",e=>{
   if(d.famsync){syncNow();return}
   if(d.copy){const ta=document.getElementById("bk");const p=navigator.clipboard?navigator.clipboard.writeText(ta.value):Promise.reject();p.then(()=>toast("コピーしました")).catch(()=>{ta.select();toast("選択しました。長押しでコピーしてください")});return}
 });
+document.addEventListener("submit",e=>{if(e.target.id==="f-place-add"){e.preventDefault();const v=document.getElementById("place-add").value.trim();if(!v)return;if(places().includes(v))return toast("同じ名前の場所があります");setPlaces([...places(),v]);toast("「"+v+"」を追加しました")}});
+document.addEventListener("change",e=>{if(e.target.id==="f-place"){const n=document.getElementById("f-place-new");if(n){n.hidden=e.target.value!=="__new";if(!n.hidden)n.focus()}}});
 document.addEventListener("keydown",e=>{if(e.key==="Escape"){closeScanner();closeSheet()}});
 function fromHash(){
   const h=(location.hash||"").slice(1);
