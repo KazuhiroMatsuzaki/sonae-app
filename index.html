@@ -369,6 +369,40 @@ function shortages(){
   return out;
 }
 const hasEss=k=>S.items.some(i=>i.ess===k&&usable(i)&&i.qty>0);
+const essQty=k=>S.items.filter(i=>i.ess===k&&usable(i)).reduce((a,i)=>a+i.qty,0);
+const nameQty=re=>S.items.filter(i=>re.test(i.name)&&usable(i)).reduce((a,i)=>a+i.qty,0);
+// 必要量の目安（家族構成 × 目標日数）。have が null のものは登録から数えられない項目
+function needList(g){
+  const p=Math.max(1,persons()),h=S.hh,L=[];
+  const add=(group,name,need,unit,have,kw,note)=>L.push({group,name,need,unit,have,kw,note});
+  add("基本","飲料水・調理用水",+(need("water")*g).toFixed(1),"L",+supply("water").toFixed(1),"保存水 2L","1人1日3L"+(h.pet?"、ペット1匹0.5L":""));
+  add("基本","食料（主食・おかず）",need("food")*g,"食",supply("food"),"非常食 長期保存","1人1日3食");
+  add("基本","簡易トイレ",need("toilet")*g,"回",supply("toilet"),"簡易トイレ 非常用","1人1日5回");
+  add("基本","カセットボンベ",Math.ceil(p*g*6/7),"本",essQty("gas"),"カセットボンベ","1人1週間で約6本");
+  add("基本","カセットコンロ",1,"台",essQty("stove"),"カセットコンロ","1世帯1台");
+  add("明かり・電源","懐中電灯・ランタン",p,"個",essQty("flashlight")||nameQty(/懐中電灯|ランタン|ライト/),"LED ランタン 防災","1人1つ");
+  add("明かり・電源","モバイルバッテリー",p,"台",essQty("mobilebat"),"モバイルバッテリー 大容量","1人1台");
+  add("明かり・電源","ラジオ（手回し・電池式）",1,"台",essQty("radio")||nameQty(/ラジオ/),"防災ラジオ 手回し","1世帯1台");
+  add("衛生・医薬品","常備薬・持病の薬",p,"人分",essQty("meds"),"","1人1週間分を目安に");
+  add("衛生・医薬品","ポリ袋（45L）",Math.ceil(p*g*1.5),"枚",essQty("bags")||nameQty(/ポリ袋|ゴミ袋/),"ポリ袋 45L","ごみ・トイレ・給水に");
+  add("衛生・医薬品","ウェットティッシュ",Math.ceil(p*g/3),"個",essQty("wipes")||nameQty(/ウェット/),"ウェットティッシュ 大容量","水が使えない時の手拭き");
+  add("衛生・医薬品","トイレットペーパー",Math.ceil(p*g/7*1.5),"ロール",nameQty(/トイレットペーパー/),"トイレットペーパー 長巻き","1人1週間で約1.5ロール");
+  add("その他","現金・小銭",1,"万円",essQty("cash"),"","千円札と100円玉を多めに");
+  if(h.infant){
+    add("乳幼児",`粉ミルク・液体ミルク`,h.infant*g*6,"回分",nameQty(/ミルク/),"液体ミルク","1日約6回");
+    add("乳幼児","紙おむつ",h.infant*g*8,"枚",nameQty(/おむつ|オムツ/),"紙おむつ","1日約8枚");
+    add("乳幼児","おしりふき",Math.ceil(h.infant*g/3),"個",nameQty(/おしりふき/),"おしりふき","");
+  }
+  if(h.elder){
+    add("高齢者","常用薬（予備）",h.elder,"人分",nameQty(/常用薬|処方/),"","お薬手帳のコピーも");
+    add("高齢者","大人用おむつ・尿とりパッド",h.elder*g*5,"枚",nameQty(/大人用|尿とり|パッド/),"大人用紙おむつ","必要な人のみ");
+  }
+  if(h.pet){
+    add("ペット","ペットフード",h.pet*g,"日分",nameQty(/フード|ペット/),"ペットフード","1匹あたり");
+    add("ペット","ペットシーツ",h.pet*g*3,"枚",nameQty(/シーツ/),"ペットシーツ","1日約3枚");
+  }
+  return L;
+}
 
 // ---- icons
 const ic={
@@ -415,7 +449,7 @@ function vHome(){
     </div>
   </section>
   <section class="card">
-    <div class="card-head"><h2>あと何を買えば${g}日分？</h2><button class="btn ghost sm" data-go="shop">買い物リストへ</button></div>
+    <div class="card-head"><h2>あと何を買えば${g}日分？</h2><button class="btn ghost sm" data-needs="1">必要な量の一覧</button></div>
     ${short.length?`<div class="list">${short.map(s=>`<div class="row"><div class="main"><b>${esc(s.name)}</b><small>${esc(s.why)}</small></div><span class="pill p-warn num">${esc(s.q)}</span></div>`).join("")}</div>`:`<p>水・食料・トイレは${g}日分そろっています。</p>`}
   </section>
   <section class="card">
@@ -523,6 +557,7 @@ function vMore(){
     <div class="hh">${hhRow("adult","大人")}${hhRow("child","子ども")}${hhRow("infant","乳幼児")}${hhRow("elder","高齢者")}${hhRow("pet","ペット")}
     <div><span>目標の日数</span><span class="chips">${[3,7,14].map(n=>`<button class="chip" data-goal="${n}" aria-pressed="${S.goal===n}">${n}日</button>`).join("")}</span></div></div>
     <p style="font-size:12px;color:var(--muted);margin-top:10px">1人1日あたり 水3L・食事3食・トイレ5回で計算（ペットは水0.5L）。国は最低3日、できれば1週間分を勧めています。</p>
+    <div class="actions" style="justify-content:flex-start"><button class="btn primary" data-needs="1">この人数で必要な量の一覧</button></div>
   </section>
   <section class="card"><div class="card-head"><h2>保管場所</h2><span>備蓄をしまっている場所</span></div>
     <div class="list">${places().map((p,ix,arr)=>{const n=S.items.filter(i=>i.place===p).length;return `<div class="row"><div class="main"><b>${esc(p)}</b><small class="num">${n}品目</small></div>${ix?`<button class="btn sm ghost" data-placeup="${ix}" aria-label="${esc(p)}を上へ">↑</button>`:""}<button class="btn sm" data-placeren="${ix}">名前を変える</button><button class="btn sm ghost" data-placedel="${ix}" style="color:var(--bad)">削除</button></div>`}).join("")}</div>
@@ -766,6 +801,21 @@ async function doJoin(id,mode){
     render();toast("家族の備蓄に参加しました");
   }catch(e){toast("つながりませんでした。少し待ってからもう一度お試しください")}
 }
+// ---- 必要な量の一覧
+function needsSheet(g){
+  const L=needList(g);const groups=[...new Set(L.map(x=>x.group))];
+  const ok=L.filter(x=>x.have!==null&&x.have>=x.need).length;
+  const fmt=n=>Number.isInteger(n)?n:n.toFixed(1);
+  openSheet(`<h2>必要な量の一覧</h2>
+  <p style="font-size:13px;color:var(--muted);margin-top:4px">${persons()}人${S.hh.infant?"（乳幼児"+S.hh.infant+"）":""}${S.hh.elder?"（高齢者"+S.hh.elder+"）":""}${S.hh.pet?"＋ペット"+S.hh.pet:""}の家で、${g}日分に必要な量の目安です。</p>
+  <div class="chips" style="margin-top:10px" role="group" aria-label="日数">${[3,7,14].map(n=>`<button class="chip" data-needgoal="${n}" aria-pressed="${g===n}">${n}日分</button>`).join("")}</div>
+  <p style="margin-top:10px;font-weight:700">${L.length}項目中 <span class="num">${ok}</span>項目がそろっています</p>
+  ${groups.map(gr=>`<h3 style="margin-top:14px">${esc(gr)}</h3><div class="list">${L.filter(x=>x.group===gr).map(x=>{
+    const st=x.have>=x.need?`<span class="pill p-ok">そろっている</span>`:x.have>0?`<span class="pill p-warn">あと${fmt(+(x.need-x.have).toFixed(1))}${x.unit}</span>`:`<span class="pill p-bad">未登録</span>`;
+    return `<div class="row"><div class="main"><b>${esc(x.name)}</b><small class="num">必要 ${fmt(x.need)}${x.unit} ・ いま ${fmt(x.have)}${x.unit}${x.note?" ・ "+esc(x.note):""}</small>${x.have<x.need&&x.kw?`<div class="actions" style="justify-content:flex-start;margin:4px 0 0">${shopLinks(x.kw)}</div>`:""}</div>${st}</div>`}).join("")}</div>`).join("")}
+  <p style="font-size:12px;color:var(--muted);margin-top:12px">農林水産省「災害時に備えた食品ストックガイド」などをもとにした目安です。「いま」は登録した備蓄から数えています。品名で数えている項目は、名前に「ラジオ」「おむつ」などの言葉が入っているものを数えます。【PR】購入リンクは広告を含みます。</p>
+  <div class="actions"><span></span><button class="btn" data-close="1">閉じる</button></div>`);
+}
 // ---- 保管場所の編集
 function setPlaces(list){S.places=[...new Set(list.map(x=>x.trim()).filter(Boolean))];save();render()}
 function placeValue(){const v=document.getElementById("f-place").value;if(v!=="__new")return v;const n=document.getElementById("f-place-new").value.trim()||"その他";if(!places().includes(n))S.places=[...places(),n];return n}
@@ -825,6 +875,8 @@ document.addEventListener("click",e=>{
   if(d.calone){const i=S.items.find(x=>x.id==d.calone);if(i)downloadIcs([i],30);return}
   if(d.print)return printSheet();
   if(d.doprint){buildPrint();closeSheet();setTimeout(()=>{try{window.print()}catch(e){toast("この画面では印刷できません。Safariで開いてください")}},100);return}
+  if(d.needs)return needsSheet(S.goal);
+  if(d.needgoal)return needsSheet(+d.needgoal);
   if(d.placeren)return placeRenameSheet(+d.placeren);
   if(d.placedel)return placeDeleteSheet(+d.placedel);
   if(d.placeup){const l=places(),i=+d.placeup;[l[i-1],l[i]]=[l[i],l[i-1]];return setPlaces(l)}
